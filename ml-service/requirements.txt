@@ -6,3 +6,8 @@ fastapi
 uvicorn[standard]
 python-dotenv
 pydantic
+pymongo
+loguru
+fastparquet
+pyarrow
+xgboost

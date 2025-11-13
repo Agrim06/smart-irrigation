@@ -11,6 +11,7 @@ if not exist data\potato_water_requirement.csv (
     echo Found existing data\potato_water_requirement.csv
 )
 
+python preprocess\fetch.py
 python preprocess\preprocessing.py
 python preprocess\features.py
 

@@ -1,0 +1,19 @@
+ml-service
+replicate models for wheat , cotton , maize , rice 
+     real datasets 
+     integrate test and train csv
+
+one common file to run ml-service
+
+
+=================================
+
+create a basic dropdown in frontend and link all the respective models
+link a button to specific model to run in predict (rooting)
+
+send data to predicted_data collection
+    send to esp (yes/no)
+    send to frontend
+        create charts for long term 
+
+

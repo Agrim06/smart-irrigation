@@ -377,7 +377,7 @@ def main():
         
         # Calculate water requirement using the exact training formula
         # This ensures predictions vary based on actual soil moisture and temperature
-        water_mm = (setpoint - soil_moisture) * 100 + max(0, temp - 18) * 1.5
+        water_mm = (setpoint - soil_moisture) * 10+ max(0, temp - 18) * 0.5
         water_mm = max(0, water_mm)  # Ensure non-negative (np.clip equivalent)
         
         # Load CSV for crop-specific maximum limits
@@ -410,7 +410,7 @@ def main():
         # Formula: (water_mm / irrigation_rate_mm_per_hr) * 3600 seconds
         # But the code uses * 60, which seems wrong - should be * 3600 for hours to seconds
         # However, keeping the existing formula for consistency, but fixing it
-        pump_time_sec = (water_mm / args.irrigation_rate) * 3600  # Fixed: hours to seconds conversion
+        pump_time_sec = (water_mm / args.irrigation_rate) * 3600 # Fixed: hours to seconds conversion
 
         print(f"  Soil moisture: {provided['soil']:.1f}% (setpoint: {setpoint*100:.1f}%)")
         print(f"  Moisture deficit: {(setpoint - soil_moisture)*100:.2f}%")

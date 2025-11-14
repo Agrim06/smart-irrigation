@@ -2,6 +2,7 @@ import { useState } from 'react';
 import MoistureChart from '../components/MoistureChart.jsx';
 import SensorHistoryTable from '../components/SensorHistoryTable.jsx';
 import PredictionCard from '../components/PredictionCard.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useLiveSensorData } from '../hooks/useLiveSensorData.js';
 import { useSensorHistory } from '../hooks/useSensorHistory.js';
 import { useLivePredictions } from '../hooks/useLivePredictions.js';
@@ -55,8 +56,13 @@ function Dashboard() {
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        <p>Smart Irrigation</p>
-        <h1>Soil Moisture Monitor</h1>
+        <div className="header-content">
+          <div>
+            <h1 className="brand-name">Terafarm</h1>
+            <p className="brand-tagline">Soil Moisture Monitor</p>
+          </div>
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* <div className="controls">

@@ -42,6 +42,7 @@ function PredictionCard({ prediction, lastUpdated, isRefreshing, hasChanged }) {
 
   const isPumpOn = prediction.pumpStatus === 'ON';
   const pumpTimeMinutes = (prediction.pumpTimeSec / 60).toFixed(1);
+  const pumpTimeHours = (prediction.pumpTimeSec / 3600).toFixed(2);
 
   return (
     <div className={`prediction-card ${isPumpOn ? 'pump-on' : 'pump-off'} ${isRefreshing ? 'refreshing' : ''}`}>
@@ -57,30 +58,33 @@ function PredictionCard({ prediction, lastUpdated, isRefreshing, hasChanged }) {
         </span>
       </div>
 
+      {/* Prominent Water and Pump Time Display */}
+      <div className="prediction-values">
+        <div className="prediction-value-item">
+          <p className="prediction-value-label">Water Required</p>
+          <p className="prediction-value">
+            {typeof prediction.waterMM === 'number' ? `${prediction.waterMM.toFixed(1)} mm` : '—'}
+          </p>
+        </div>
+        <div className="prediction-value-item">
+          <p className="prediction-value-label">Pump Time</p>
+          <p className="prediction-value">
+            {typeof prediction.pumpTimeSec === 'number' 
+              ? prediction.pumpTimeSec >= 3600 
+                ? `${pumpTimeHours} hrs`
+                : `${pumpTimeMinutes} min`
+              : '—'}
+          </p>
+        </div>
+      </div>
+
       <div className={`prediction-details ${isAnimating || hasChanged ? 'data-updated' : ''}`}>
-        {isPumpOn ? (
-          <>
-            <div className="detail-row">
-              <span className="label">Water Required:</span>
-              <span className="value">{prediction.waterMM.toFixed(1)} mm</span>
-            </div>
-            <div className="detail-row">
-              <span className="label">Pump Duration:</span>
-              <span className="value">{pumpTimeMinutes} minutes</span>
-            </div>
-            <div className="detail-row">
-              <span className="label">Status:</span>
-              <span className={`value ${prediction.used ? 'used' : 'pending'}`}>
-                {prediction.used ? 'Used' : 'Pending'}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="detail-row">
-            <span className="label">Status:</span>
-            <span className="value">No irrigation needed</span>
-          </div>
-        )}
+        <div className="detail-row">
+          <span className="label">Status:</span>
+          <span className={`value ${prediction.used ? 'used' : 'pending'}`}>
+            {prediction.used ? 'Used' : isPumpOn ? 'Pending' : 'No irrigation needed'}
+          </span>
+        </div>
 
         <div className="detail-row">
           <span className="label">Device:</span>

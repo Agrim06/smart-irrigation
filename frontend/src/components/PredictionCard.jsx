@@ -32,7 +32,9 @@ function PredictionCard({ prediction, lastUpdated, isRefreshing, hasChanged }) {
   if (!prediction) {
     return (
       <div className="prediction-card">
-        <h2>Prediction Status</h2>
+        <div className="prediction-header">
+          <h2>Prediction Status</h2>
+        </div>
         <p className="no-data">No predictions available yet</p>
       </div>
     );

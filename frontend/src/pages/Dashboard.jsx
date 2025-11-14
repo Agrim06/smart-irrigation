@@ -5,6 +5,7 @@ import PredictionCard from '../components/PredictionCard.jsx';
 import { useLiveSensorData } from '../hooks/useLiveSensorData.js';
 import { useSensorHistory } from '../hooks/useSensorHistory.js';
 import { useLivePredictions } from '../hooks/useLivePredictions.js';
+import { useAlerts } from '../hooks/useAlerts.js';
 
 const safeRange = { min: 20, max: 45 };
 
@@ -36,6 +37,13 @@ function Dashboard() {
   } = useLivePredictions({
     deviceId,
     pollInterval: 10000
+  });
+
+  // Use alerts hook only for push notifications (no UI display)
+  useAlerts({
+    deviceId,
+    pollInterval: 10000,
+    enableNotifications: true
   });
 
   const handleRefresh = () => {

@@ -79,6 +79,63 @@ def fetch_latest_sensor_data(mongo_uri, device_id=None):
     except Exception as e:
         raise RuntimeError(f"Failed to fetch from MongoDB: {e}")
 
+def create_alert(mongo_uri, device_id, pump_status, water_mm, pump_time_sec, previous_pump_status=None):
+    """
+    Create an alert when pump status changes.
+    
+    Args:
+        mongo_uri: MongoDB connection URI
+        device_id: Device ID from sensor data (or None)
+        pump_status: 1 for ON, 0 for OFF
+        water_mm: Water amount in mm
+        pump_time_sec: Pump time in seconds
+        previous_pump_status: Previous pump status (0 or 1) if known, None if first prediction
+    """
+    try:
+        client = MongoClient(mongo_uri)
+        db = client["irrigation_db"]
+        alert_collection = db["alerts"]
+        
+        device_key = device_id or "unknown"
+        
+        # Check if we already created an alert for this status change recently (within last 30 seconds)
+        cutoff_time = datetime.utcnow() - timedelta(seconds=30)
+        existing_alert = alert_collection.find_one({
+            "deviceId": device_key,
+            "type": "PUMP_ON" if pump_status == 1 else "PUMP_OFF",
+            "createdAt": {"$gte": cutoff_time},
+            "read": False
+        }, sort=[("createdAt", -1)])
+        
+        if not existing_alert:
+            alert_type = "PUMP_ON" if pump_status == 1 else "PUMP_OFF"
+            
+            if pump_status == 1:
+                pump_time_min = pump_time_sec / 60
+                message = f"Irrigation required: {water_mm:.1f} mm of water needed. Pump should run for {pump_time_min:.1f} minutes."
+            else:
+                message = "No irrigation needed. Pump should remain OFF."
+            
+            alert_doc = {
+                "deviceId": device_key,
+                "type": alert_type,
+                "message": message,
+                "waterMM": water_mm,
+                "pumpTimeSec": pump_time_sec,
+                "read": False,
+                "createdAt": datetime.utcnow()
+            }
+            
+            alert_collection.insert_one(alert_doc)
+            print(f"  ✓ Alert created: {alert_type} for device {device_key}")
+        else:
+            print(f"  Alert already exists for this status change (within last 30s)")
+    except Exception as e:
+        # Don't fail prediction if alert creation fails
+        import traceback
+        print(f"  ⚠ Warning: Failed to create alert: {e}")
+        print(f"  Traceback: {traceback.format_exc()}")
+
 def save_prediction_to_db(mongo_uri, device_id, pump_status, water_mm, pump_time_sec, skip_duplicates=True):
     """
     Save prediction result to irrigation_db.predictions collection.
@@ -96,13 +153,28 @@ def save_prediction_to_db(mongo_uri, device_id, pump_status, water_mm, pump_time
         db = client["irrigation_db"]
         collection = db["predictions"]
         
+        device_key = device_id or "unknown"
+        
+        # Check for status change BEFORE checking duplicates
+        # This ensures alerts are created even if prediction is duplicate
+        all_predictions = list(collection.find(
+            {"deviceId": device_key}
+        ).sort([("createdAt", -1)]).limit(2))
+        
+        # Determine previous pump status
+        previous_pump_status = None
+        if len(all_predictions) > 0:
+            previous_prediction = all_predictions[0]  # Most recent prediction
+            previous_pump_status = 1 if previous_prediction.get("waterMM", 0) > 0 else 0
+        
         # Check for duplicate predictions if enabled
+        is_duplicate = False
         if skip_duplicates:
             # Check if an identical prediction was created in the last 15 seconds
             cutoff_time = datetime.utcnow() - timedelta(seconds=15)
             
             duplicate = collection.find_one({
-                "deviceId": device_id or "unknown",
+                "deviceId": device_key,
                 "waterMM": water_mm,
                 "pumpTimeSec": pump_time_sec,
                 "used": (pump_status == 0),
@@ -111,7 +183,17 @@ def save_prediction_to_db(mongo_uri, device_id, pump_status, water_mm, pump_time
             
             if duplicate:
                 print(f"  Skipping duplicate prediction (identical prediction already exists)")
-                return duplicate.get("_id")
+                is_duplicate = True
+        
+        # Always create alert if status changed, even if prediction is duplicate
+        status_changed = (previous_pump_status is None or previous_pump_status != pump_status)
+        if status_changed:
+            print(f"  Status change detected: {'ON' if previous_pump_status == 1 else 'OFF' if previous_pump_status == 0 else 'N/A'} -> {'ON' if pump_status == 1 else 'OFF'}")
+            create_alert(mongo_uri, device_id, pump_status, water_mm, pump_time_sec, previous_pump_status)
+        
+        # If duplicate, return existing prediction ID without saving
+        if is_duplicate:
+            return duplicate.get("_id")
         
         # Generate predictionId as ISO timestamp
         prediction_id = datetime.utcnow().isoformat() + "Z"
@@ -122,7 +204,7 @@ def save_prediction_to_db(mongo_uri, device_id, pump_status, water_mm, pump_time
         used = (pump_status == 0)
         
         prediction_doc = {
-            "deviceId": device_id or "unknown",
+            "deviceId": device_key,
             "waterMM": water_mm,
             "pumpTimeSec": pump_time_sec,
             "predictionId": prediction_id,
@@ -131,7 +213,9 @@ def save_prediction_to_db(mongo_uri, device_id, pump_status, water_mm, pump_time
         }
         
         result = collection.insert_one(prediction_doc)
-        return result.inserted_id
+        prediction_id_result = result.inserted_id
+        
+        return prediction_id_result
     except Exception as e:
         raise RuntimeError(f"Failed to save prediction to MongoDB: {e}")
 

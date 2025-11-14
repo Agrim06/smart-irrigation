@@ -46,6 +46,21 @@ const predictionSchema = new mongoose.Schema({
 const Prediction = mongoose.model("Prediction", predictionSchema);
 
 
+// -------------------------------
+// Alert Schema
+// -------------------------------
+const alertSchema = new mongoose.Schema({
+  deviceId: String,
+  type: { type: String, enum: ['PUMP_ON', 'PUMP_OFF'], required: true },
+  message: String,
+  waterMM: Number,
+  pumpTimeSec: Number,
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+const Alert = mongoose.model("Alert", alertSchema);
+
+
 // =====================================================================
 // 1️⃣ Save Sensor Data
 // =====================================================================
@@ -247,9 +262,20 @@ app.get("/api/predictions/latest", async (req, res) => {
 // =====================================================================
 app.get("/api/predictions", async (req, res) => {
   try {
-    const { deviceId, limit = 50 } = req.query;
+    const { deviceId, limit = 50, days } = req.query;
     const filter = deviceId ? { deviceId } : {};
-    const size = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    
+    // Add date filter if days parameter is provided
+    if (days) {
+      const daysNum = parseInt(days, 10);
+      if (!isNaN(daysNum) && daysNum > 0) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysNum);
+        filter.createdAt = { $gte: cutoffDate };
+      }
+    }
+    
+    const size = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 1000);
 
     const predictions = await Prediction.find(filter)
       .sort({ createdAt: -1 })
@@ -267,6 +293,133 @@ app.get("/api/predictions", async (req, res) => {
         pumpStatus: p.waterMM > 0 ? "ON" : "OFF"
       }))
     });
+  }
+  catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// =====================================================================
+// 7️⃣ Get Alerts (unread first, then by date)
+// =====================================================================
+app.get("/api/alerts", async (req, res) => {
+  try {
+    const { deviceId, limit = 50, unreadOnly = false } = req.query;
+    const filter = {};
+    
+    if (deviceId) filter.deviceId = deviceId;
+    if (unreadOnly === 'true') filter.read = false;
+    
+    const size = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+
+    const alerts = await Alert.find(filter)
+      .sort({ read: 1, createdAt: -1 }) // Unread first, then by date
+      .limit(size);
+
+    res.json({
+      success: true,
+      data: alerts.map(a => ({
+        _id: a._id,
+        deviceId: a.deviceId,
+        type: a.type,
+        message: a.message,
+        waterMM: a.waterMM,
+        pumpTimeSec: a.pumpTimeSec,
+        read: a.read,
+        createdAt: a.createdAt
+      }))
+    });
+  }
+  catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// =====================================================================
+// 8️⃣ Get Latest Alert (unread first, then any latest)
+// =====================================================================
+app.get("/api/alerts/latest", async (req, res) => {
+  try {
+    const { deviceId, unreadOnly = 'false' } = req.query;
+    const filter = {};
+    if (deviceId) filter.deviceId = deviceId;
+    
+    // First try to get unread alert
+    const unreadFilter = { ...filter, read: false };
+    let latest = await Alert.findOne(unreadFilter)
+      .sort({ createdAt: -1 });
+
+    // If no unread alert and unreadOnly is false, get the latest alert (even if read)
+    if (!latest && unreadOnly !== 'true') {
+      latest = await Alert.findOne(filter)
+        .sort({ createdAt: -1 });
+    }
+
+    if (!latest) {
+      return res.json({
+        success: false,
+        error: "No alerts found",
+        data: null
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        _id: latest._id,
+        deviceId: latest.deviceId,
+        type: latest.type,
+        message: latest.message,
+        waterMM: latest.waterMM,
+        pumpTimeSec: latest.pumpTimeSec,
+        read: latest.read,
+        createdAt: latest.createdAt
+      }
+    });
+  }
+  catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// =====================================================================
+// 9️⃣ Mark Alert as Read
+// =====================================================================
+app.post("/api/alerts/:alertId/read", async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const alert = await Alert.findById(alertId);
+    
+    if (!alert) {
+      return res.status(404).json({ success: false, error: "Alert not found" });
+    }
+
+    alert.read = true;
+    await alert.save();
+
+    res.json({ success: true });
+  }
+  catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// =====================================================================
+// 🔟 Mark All Alerts as Read
+// =====================================================================
+app.post("/api/alerts/read-all", async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const filter = { read: false };
+    if (deviceId) filter.deviceId = deviceId;
+
+    await Alert.updateMany(filter, { read: true });
+
+    res.json({ success: true });
   }
   catch (e) {
     res.status(500).json({ success: false, error: e.message });

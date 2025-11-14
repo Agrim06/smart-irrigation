@@ -19,7 +19,7 @@ function MoistureChart({
 
   return (
     <article className="card">
-      <h2>Current Moisture</h2>
+      <h2 style={{ textAlign: 'center', fontSize: '1.5rem' }}>Current Moisture</h2>
       <p className="moisture-value">
         {typeof moisture === 'number' ? `${moisture.toFixed(1)}%` : '—'}
       </p>

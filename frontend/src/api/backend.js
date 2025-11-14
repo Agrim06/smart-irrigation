@@ -66,10 +66,11 @@ export async function fetchLatestPrediction(deviceId) {
   return payload.data ?? null;
 }
 
-export async function fetchPredictionHistory({ deviceId, limit = 50 } = {}) {
+export async function fetchPredictionHistory({ deviceId, limit = 50, days } = {}) {
   const params = new URLSearchParams();
   if (deviceId) params.set('deviceId', deviceId);
   if (limit) params.set('limit', limit);
+  if (days) params.set('days', days);
 
   const response = await fetch(`${API_BASE_URL}/api/predictions?${params.toString()}`, {
     headers: { 'Content-Type': 'application/json' }
@@ -86,4 +87,78 @@ export async function fetchPredictionHistory({ deviceId, limit = 50 } = {}) {
   }
 
   return payload.data ?? [];
+}
+
+export async function fetchAlerts({ deviceId, limit = 50, unreadOnly = false } = {}) {
+  const params = new URLSearchParams();
+  if (deviceId) params.set('deviceId', deviceId);
+  if (limit) params.set('limit', limit);
+  if (unreadOnly) params.set('unreadOnly', 'true');
+
+  const response = await fetch(`${API_BASE_URL}/api/alerts?${params.toString()}`, {
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend error (${response.status})`);
+  }
+
+  const payload = await response.json();
+
+  if (!payload.success) {
+    throw new Error(payload.error || 'Unknown backend error');
+  }
+
+  return payload.data ?? [];
+}
+
+export async function fetchLatestAlert(deviceId) {
+  const params = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+  const response = await fetch(`${API_BASE_URL}/api/alerts/latest${params}`, {
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend error (${response.status})`);
+  }
+
+  const payload = await response.json();
+
+  if (!payload.success) {
+    if (payload.data === null) {
+      return null;
+    }
+    throw new Error(payload.error || 'Unknown backend error');
+  }
+
+  return payload.data ?? null;
+}
+
+export async function markAlertAsRead(alertId) {
+  const response = await fetch(`${API_BASE_URL}/api/alerts/${alertId}/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend error (${response.status})`);
+  }
+
+  const payload = await response.json();
+  return payload.success;
+}
+
+export async function markAllAlertsAsRead(deviceId) {
+  const response = await fetch(`${API_BASE_URL}/api/alerts/read-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend error (${response.status})`);
+  }
+
+  const payload = await response.json();
+  return payload.success;
 }
